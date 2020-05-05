@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd        http://camel.apache.org/schema/spring       http://camel.apache.org/schema/spring/camel-spring.xsd">
+	<bean class="org.apache.camel.component.properties.PropertiesComponent"	id="properties">
+		<property name="location" value="classpath:application.properties" />
+	</bean>
+	<camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
+		<propertyPlaceholder id="placeholder" location="classpath:application.properties" />
+		<dataFormats>
+			<jacksonxml id="xml" prettyPrint="true" />
+			<xmljson elementName="e" encoding="UTF-8"
+				expandableProperties="d e" forceTopLevelObject="true"
+				id="xmljsonWithOptions" removeNamespacePrefixes="true"
+				rootName="root" skipNamespaces="true" trimSpaces="true" />
+		</dataFormats>
+		<route id="healthRoute" streamCache="true">
+			<from id="healthFrom"
+				uri="restlet:http://0.0.0.0:8892/ws/uti/secrets/health?restletMethod=GET" />
+			<setBody id="_bodyHealth">
+				<simple>{"status":"UP"}</simple>
+			</setBody>
+			<setHeader headerName="Content-Type"
+				id="setHeaderResponseHealth">
+				<constant>application/json; charset=UTF-8</constant>
+			</setHeader>
+		</route>
+		<route id="RouteListaDenegada" streamCache="true">
+			<from id="backendServiceFrom" uri="restlet:http://0.0.0.0:8892/ws/uti/secrets?restletMethod=POST" />
+			<doTry id="_doTryListaDenegada">
+				<log id="logListaDenegada1" message="${header.ApplicationId}/${header.ServiceName} - Inicio: ${body}" />
+				<setProperty id="_setProperty1Secrets1" propertyName="pSecrets1">
+                	<simple>{{SECRET_TEST_UNO}}</simple>
+            	</setProperty>
+            	<setProperty id="_setProperty2Secrets2" propertyName="pSecrets2">
+                	<simple>{{SECRET_TEST_DOS}}</simple>
+            	</setProperty>
+            	<to id="mapRqService2ConsultaControversias" uri="xslt:xslt/Secrets/IN_ConsultarControversias.xsl"/>
+				<setBody id="_setBody2">
+					<simple>{{root.ini}}${body}{{root.fin}}</simple>
+				</setBody>
+				<to id="_to1" uri="xslt:xslt/ConvertToBody.xsl" />
+				<setProperty id="_setProperty3"
+					propertyName="_propertySplitBins">
+					<simple />
+				</setProperty>
+				<simple>${headers.MethodService}  == 'SELECT'</simple>
+				<setProperty id="_setProperty5"
+					propertyName="_propertyOperationsListaDenegada">
+					<simple>{{sql.select}}</simple>
+				</setProperty>
+				<toD id="_toDListaDenegada" uri="" />
+				<bean id="_beanListaDenegada1" method="setPropertySplit"
+					ref="myUtilClass" />
+				<setBody id="_setBody1">
+					<simple>${property._propertySplitBins}</simple>
+				</setBody>
+				<setProperty id="_propertyResponseCodeListaDenegada"
+					propertyName="_propertyResponseCode">
+					<jsonpath>codeResponse</jsonpath>
+				</setProperty>
+				<bean id="_beanListaDenegada2" method="seyHeaderResponseCode"
+					ref="myUtilClass" />
+				<log id="logBackendService2"
+					message="${header.ApplicationId}/${header.ServiceName} - Fin: ${body}" />
+				<removeHeaders excludePattern="CamelHttpResponseCode"
+					id="_removeHeaders1" pattern="*" />
+				<setHeader headerName="Content-Type"
+					id="setHeaderResponseRate">
+					<constant>application/json; charset=UTF-8</constant>
+				</setHeader>
+				<doCatch id="_doCatchListaDenegada1">
+					<exception>java.lang.Exception</exception>
+					<handled>
+						<simple>true</simple>
+					</handled>
+					<log id="_log1" message="${exception}" />
+					<to id="_toExeptionUtiListaDenegada"
+						uri="direct:ExeptionManagement" />
+				</doCatch>
+			</doTry>
+		</route>
+		<route id="ExeptionRouteListaDenegada">
+			<from id="ExeptionRouteFrom" uri="direct:ExeptionManagement" />
+			<setBody id="setBodyExeptionRate">
+				<simple>resource:classpath:xslt/fault.xml</simple>
+			</setBody>
+			<transform id="_transformListaDenegada">
+				<simple>${body.replaceAll("\u0022","\'")}</simple>
+			</transform>
+			<to id="mapFaultRate" uri="xslt:xslt/FAULT_VisaNetFault.xsl" />
+			<setHeader headerName="Content-Type" id="setHeaderExeption">
+				<simple>application/json; charset=UTF-8</simple>
+			</setHeader>
+		</route>
+	</camelContext>
+	<bean class="pe.com.visanet.configuration.Utilitario"
+		id="myUtilClass" />
+</beans>
